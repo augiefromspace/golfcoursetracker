@@ -3,225 +3,170 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Leeton Golf Tracker — Vibes Edition</title>
-
+<title>Leeton Golf Tracker — 18 Hole Smooth</title>
 <style>
-  body {
-    margin: 0;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    background: #eef3ea;
-    color: #222;
-  }
-  header {
-    padding: 1rem;
-    background: #234c29;
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: bold;
-  }
-  header select {
-    padding: 0.5rem;
-    border-radius: 6px;
-    border: none;
-    font-size: 1rem;
-  }
-  #courseSVG {
-    width: 100%;
-    height: 450px;
-    border-top: 4px solid #234c29;
-    border-bottom: 4px solid #234c29;
-  }
-  .distance-display {
-    padding: 1rem;
-    font-size: 1.3rem;
-    text-align: center;
-    background: #f7f9f3;
-    font-weight: bold;
-  }
-  #scorecard {
-    margin: 1rem auto;
-    max-width: 460px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
-    padding: 1rem;
-  }
-  .score-hole {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.4rem 0;
-  }
-  .score-hole input {
-    width: 50px;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    padding: 0.2rem;
-  }
-  /* nicer SVG styling */
-  .fairway {
-    fill: url(#fairwayGrad);
-    stroke: #2b5f33;
-    stroke-width: 1.5;
-  }
-  .green {
-    fill: url(#greenGrad);
-    stroke: #1f5e21;
-    stroke-width: 1.5;
-  }
-  .bunker {
-    fill: #d6b77c;
-    stroke: #bfa06b;
-    stroke-width: 1.2;
-  }
+  html, body { margin:0; padding:0; height:100%; font-family:sans-serif; }
+  body { background:#eef3ea; }
+  header { background:#234c29; color:white; padding:1rem; display:flex; justify-content:space-between; align-items:center; font-weight:bold; }
+  select { padding:0.5rem; border-radius:6px; font-size:1rem; }
+  svg { width:100%; height:calc(100vh - 120px); }
+  .distance { padding:1rem; text-align:center; font-weight:bold; font-size:1.2rem; background:#f7f9f3; }
+  .fairway { fill:#77cc77; stroke:#2b5f33; stroke-width:1.5; }
+  .green { fill:#339933; stroke:#1f5e21; stroke-width:1.5; }
+  .bunker { fill:#d6b77c; stroke:#bfa06b; stroke-width:1.2; }
+  .tee { fill:#e53935; }
+  .player { fill:#2979ff; }
+  .flag { fill:#fdd835; }
+  .distance-line { stroke:#fdd835; stroke-width:2; stroke-dasharray:5,5; }
 </style>
 </head>
-
 <body>
 
 <header>
-  <h1>Leeton Golf Tracker</h1>
+  <h1>Leeton Golf</h1>
   <select id="holeSelect"></select>
 </header>
 
-<svg id="courseSVG">
-  <!-- gradients for better vibe -->
-  <defs>
-    <linearGradient id="fairwayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#82c97a" />
-      <stop offset="100%" stop-color="#6ab661" />
-    </linearGradient>
-    <radialGradient id="greenGrad" cx="50%" cy="50%" r="60%">
-      <stop offset="0%" stop-color="#49aa34" />
-      <stop offset="100%" stop-color="#317a22" />
-    </radialGradient>
-  </defs>
-</svg>
+<svg id="courseSVG"></svg>
 
-<div class="distance-display" id="distance">Distance to green: — m</div>
-
-<div id="scorecard">
-  <h2>Scorecard</h2>
-  <div id="scores"></div>
-</div>
+<div class="distance" id="distance">Distance to green: — m</div>
 
 <script>
-let holesData;
-let currentHoleIndex = 0;
+let holesData, currentHoleIndex = 0;
 let svg = document.getElementById('courseSVG');
 let holeSelect = document.getElementById('holeSelect');
-let player = { x: 100, y: 350 };
-let scores = Array(18).fill(0);
+let player = {lat:-34.5715, lng:146.4068, x:50, y:400}; // initial mock position
 
-async function init() {
+function haversine(lat1, lon1, lat2, lon2){
+  const R=6371000; // meters
+  const toRad=Math.PI/180;
+  let dLat=(lat2-lat1)*toRad;
+  let dLon=(lon2-lon1)*toRad;
+  let a=Math.sin(dLat/2)**2 + Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLon/2)**2;
+  let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+
+// convert fairway points to Bézier path
+function createBezierPath(points){
+  if(points.length<2) return '';
+  let d = `M${points[0].x},${points[0].y}`;
+  for(let i=1;i<points.length;i++){
+    let p=points[i];
+    if(p.c1x!==undefined && p.c2x!==undefined){
+      d+=` C${p.c1x},${p.c1y} ${p.c2x},${p.c2y} ${p.x},${p.y}`;
+    } else {
+      d+=` L${p.x},${p.y}`;
+    }
+  }
+  return d;
+}
+
+async function init(){
   holesData = await fetch('data/holes.json').then(r=>r.json());
 
-  holesData.forEach((h, i) => {
+  holesData.forEach((h,i)=>{
     let opt = document.createElement('option');
-    opt.value = i;
-    opt.text = `Hole ${h.hole} — Par ${h.par}`;
+    opt.value=i; opt.text=`Hole ${h.hole} - Par ${h.par}`;
     holeSelect.appendChild(opt);
   });
-
-  holeSelect.onchange = () => {
-    currentHoleIndex = +holeSelect.value;
-    drawHole();
-    updateDistance();
-    renderScorecard();
-  };
+  holeSelect.onchange=()=>{currentHoleIndex=+holeSelect.value; drawHole(); updateDistance();};
 
   drawHole();
   updateDistance();
-  renderScorecard();
 
-  if(navigator.geolocation) {
-    navigator.geolocation.watchPosition(pos => {
-      // map real GPS slowly to SVG coords for prototype vibe
-      player.x = (pos.coords.longitude % 1) * svg.clientWidth;
-      player.y = (pos.coords.latitude % 1) * svg.clientHeight;
+  if(navigator.geolocation){
+    navigator.geolocation.watchPosition(pos=>{
+      player.lat = pos.coords.latitude;
+      player.lng = pos.coords.longitude;
+
+      // map GPS to SVG linearly per hole (approx)
+      const hole = holesData[currentHoleIndex];
+      const tee = hole.tee, green = hole.green.center;
+      player.x = tee.x + (player.lng - tee.lng)/(green.lng - tee.lng) * (green.x - tee.x);
+      player.y = tee.y + (player.lat - tee.lat)/(green.lat - tee.lat) * (green.y - tee.y);
+
       drawHole();
       updateDistance();
-    });
+    }, err=>console.log(err), {enableHighAccuracy:true, maximumAge:1000});
+  } else {
+    // simulate player moving if no GPS
+    setInterval(()=>{
+      player.x += 2; if(player.x>700) player.x=50;
+      drawHole(); updateDistance();
+    },1000);
   }
 }
 
-function drawHole() {
-  svg.innerHTML = svg.querySelector('defs').outerHTML;
+function drawHole(){
+  svg.innerHTML=''; // clear
 
   const hole = holesData[currentHoleIndex];
+
   // fairway
-  let f = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-  f.setAttribute("points", hole.fairway.map(p => p.join(',')).join(' '));
-  f.classList.add("fairway");
-  svg.appendChild(f);
+  let fPath = document.createElementNS("http://www.w3.org/2000/svg","path");
+  fPath.setAttribute("d", createBezierPath(hole.fairway));
+  fPath.classList.add('fairway');
+  svg.appendChild(fPath);
 
   // bunkers
-  hole.bunkers.forEach(b => {
+  hole.bunkers.forEach(b=>{
     let bu = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-    bu.setAttribute("points", b.map(p => p.join(',')).join(' '));
-    bu.classList.add("bunker");
+    bu.setAttribute("points", b.map(p=>`${p.x},${p.y}`).join(' '));
+    bu.classList.add('bunker');
     svg.appendChild(bu);
   });
 
   // green
   let g = document.createElementNS("http://www.w3.org/2000/svg","circle");
-  g.setAttribute("cx", hole.green.center[0]);
-  g.setAttribute("cy", hole.green.center[1]);
+  g.setAttribute("cx", hole.green.center.x);
+  g.setAttribute("cy", hole.green.center.y);
   g.setAttribute("r", hole.green.radius);
-  g.classList.add("green");
+  g.classList.add('green');
   svg.appendChild(g);
 
   // tee
   let t = document.createElementNS("http://www.w3.org/2000/svg","circle");
-  t.setAttribute("cx", hole.tee[0]);
-  t.setAttribute("cy", hole.tee[1]);
-  t.setAttribute("r", 6);
-  t.setAttribute("fill", "#e53935");
+  t.setAttribute("cx", hole.tee.x);
+  t.setAttribute("cy", hole.tee.y);
+  t.setAttribute("r",6);
+  t.classList.add('tee');
   svg.appendChild(t);
 
   // player
   let p = document.createElementNS("http://www.w3.org/2000/svg","circle");
   p.setAttribute("cx", player.x);
   p.setAttribute("cy", player.y);
-  p.setAttribute("r", 6);
-  p.setAttribute("fill", "#2979ff");
+  p.setAttribute("r",6);
+  p.classList.add('player');
   svg.appendChild(p);
 
   // flag
   let flag = document.createElementNS("http://www.w3.org/2000/svg","rect");
-  flag.setAttribute("x", hole.green.center[0] - 3);
-  flag.setAttribute("y", hole.green.center[1] - hole.green.radius - 18);
-  flag.setAttribute("width", 6);
-  flag.setAttribute("height", 18);
-  flag.setAttribute("fill", "#fdd835");
+  flag.setAttribute("x", hole.green.center.x-3);
+  flag.setAttribute("y", hole.green.center.y-18);
+  flag.setAttribute("width",6);
+  flag.setAttribute("height",18);
+  flag.classList.add('flag');
   svg.appendChild(flag);
+
+  // distance line
+  let line = document.createElementNS("http://www.w3.org/2000/svg","line");
+  line.setAttribute("x1", player.x);
+  line.setAttribute("y1", player.y);
+  line.setAttribute("x2", hole.green.center.x);
+  line.setAttribute("y2", hole.green.center.y);
+  line.classList.add('distance-line');
+  svg.appendChild(line);
 }
 
-function updateDistance() {
+function updateDistance(){
   const hole = holesData[currentHoleIndex];
-  let dx = player.x - hole.green.center[0];
-  let dy = player.y - hole.green.center[1];
-  let d = Math.sqrt(dx*dx + dy*dy);
-  document.getElementById('distance').innerText = `Distance to green: ${Math.round(d)} m`;
-}
-
-function renderScorecard() {
-  let scoresDiv = document.getElementById('scores');
-  scoresDiv.innerHTML = '';
-  holesData.forEach((h, i) => {
-    scoresDiv.innerHTML += `
-      <div class="score-hole">
-        <span>Hole ${h.hole} (Par ${h.par})</span>
-        <input type="number" min="0" value="${scores[i]}" data-idx="${i}">
-      </div>`;
-  });
-  scoresDiv.querySelectorAll('input')
-    .forEach(inp => inp.onchange = e => scores[e.target.dataset.idx] = +e.target.value);
+  let dist = haversine(player.lat, player.lng, hole.green.center.lat, hole.green.center.lng);
+  document.getElementById('distance').innerText = `Distance to green: ${Math.round(dist)} m`;
 }
 
 init();
 </script>
-
 </body>
 </html>
