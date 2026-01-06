@@ -1,157 +1,227 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leeton Golf 18-Hole Tracker</title>
-  <style>
-    body { font-family: Arial; margin:0; background:#f0f0f0; }
-    header { display:flex; justify-content:space-between; align-items:center; padding:1rem; background:#2c3e50; color:#fff; }
-    svg { border:2px solid #333; background:#cce5cc; display:block; margin:0 auto; }
-    #distance { padding:1rem; font-size:1.2rem; text-align:center; }
-    #scorecard { padding:1rem; max-width:400px; margin:0 auto 2rem; background:#fff; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.2); }
-    .score-hole { display:flex; justify-content:space-between; padding:0.2rem 0; }
-    .score-hole input { width:40px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leeton Golf Tracker — Vibes Edition</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: #eef3ea;
+    color: #222;
+  }
+  header {
+    padding: 1rem;
+    background: #234c29;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+  }
+  header select {
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: none;
+    font-size: 1rem;
+  }
+  #courseSVG {
+    width: 100%;
+    height: 450px;
+    border-top: 4px solid #234c29;
+    border-bottom: 4px solid #234c29;
+  }
+  .distance-display {
+    padding: 1rem;
+    font-size: 1.3rem;
+    text-align: center;
+    background: #f7f9f3;
+    font-weight: bold;
+  }
+  #scorecard {
+    margin: 1rem auto;
+    max-width: 460px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+    padding: 1rem;
+  }
+  .score-hole {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+  }
+  .score-hole input {
+    width: 50px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    padding: 0.2rem;
+  }
+  /* nicer SVG styling */
+  .fairway {
+    fill: url(#fairwayGrad);
+    stroke: #2b5f33;
+    stroke-width: 1.5;
+  }
+  .green {
+    fill: url(#greenGrad);
+    stroke: #1f5e21;
+    stroke-width: 1.5;
+  }
+  .bunker {
+    fill: #d6b77c;
+    stroke: #bfa06b;
+    stroke-width: 1.2;
+  }
+</style>
 </head>
+
 <body>
-  <div id="app">
-    <header>
-      <h1>Leeton Golf Tracker</h1>
-      <select id="holeSelect"></select>
-    </header>
-    <svg id="courseSVG" width="100%" height="500px"></svg>
-    <div id="distance">Distance to green: -- m</div>
-    <div id="scorecard">
-      <h2>Scorecard</h2>
-      <div id="scores"></div>
-    </div>
-  </div>
-  <script>
-    let holesData;
-    let currentHoleIndex = 0;
-    let svg, holeSelect;
-    let player = {x:50, y:400};
-    let scores = Array(18).fill(0);
 
-    window.onload = async () => {
-      svg = document.getElementById('courseSVG');
-      holeSelect = document.getElementById('holeSelect');
+<header>
+  <h1>Leeton Golf Tracker</h1>
+  <select id="holeSelect"></select>
+</header>
 
-      // Load holes
-      holesData = await fetch('data/holes.json').then(r=>r.json());
+<svg id="courseSVG">
+  <!-- gradients for better vibe -->
+  <defs>
+    <linearGradient id="fairwayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#82c97a" />
+      <stop offset="100%" stop-color="#6ab661" />
+    </linearGradient>
+    <radialGradient id="greenGrad" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#49aa34" />
+      <stop offset="100%" stop-color="#317a22" />
+    </radialGradient>
+  </defs>
+</svg>
 
-      // Populate hole selector
-      holesData.forEach((h,i)=>{
-        let opt = document.createElement('option');
-        opt.value = i;
-        opt.text = `Hole ${h.hole} - Par ${h.par}`;
-        holeSelect.appendChild(opt);
-      });
+<div class="distance-display" id="distance">Distance to green: — m</div>
 
-      holeSelect.addEventListener('change', (e)=>{
-        currentHoleIndex = parseInt(e.target.value);
-        drawHole();
-        updateDistance();
-        renderScorecard();
-      });
+<div id="scorecard">
+  <h2>Scorecard</h2>
+  <div id="scores"></div>
+</div>
 
+<script>
+let holesData;
+let currentHoleIndex = 0;
+let svg = document.getElementById('courseSVG');
+let holeSelect = document.getElementById('holeSelect');
+let player = { x: 100, y: 350 };
+let scores = Array(18).fill(0);
+
+async function init() {
+  holesData = await fetch('data/holes.json').then(r=>r.json());
+
+  holesData.forEach((h, i) => {
+    let opt = document.createElement('option');
+    opt.value = i;
+    opt.text = `Hole ${h.hole} — Par ${h.par}`;
+    holeSelect.appendChild(opt);
+  });
+
+  holeSelect.onchange = () => {
+    currentHoleIndex = +holeSelect.value;
+    drawHole();
+    updateDistance();
+    renderScorecard();
+  };
+
+  drawHole();
+  updateDistance();
+  renderScorecard();
+
+  if(navigator.geolocation) {
+    navigator.geolocation.watchPosition(pos => {
+      // map real GPS slowly to SVG coords for prototype vibe
+      player.x = (pos.coords.longitude % 1) * svg.clientWidth;
+      player.y = (pos.coords.latitude % 1) * svg.clientHeight;
       drawHole();
       updateDistance();
-      renderScorecard();
+    });
+  }
+}
 
-      // GPS / simulation
-      if(navigator.geolocation){
-        navigator.geolocation.watchPosition(pos=>{
-          player.x = pos.coords.longitude%800;
-          player.y = pos.coords.latitude%500;
-          drawHole();
-          updateDistance();
-        });
-      } else {
-        setInterval(()=>{
-          player.x += 1; if(player.x>800) player.x=50;
-          drawHole(); updateDistance();
-        },1000);
-      }
-    };
+function drawHole() {
+  svg.innerHTML = svg.querySelector('defs').outerHTML;
 
-    function drawHole(){
-      svg.innerHTML = '';
-      const hole = holesData[currentHoleIndex];
+  const hole = holesData[currentHoleIndex];
+  // fairway
+  let f = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+  f.setAttribute("points", hole.fairway.map(p => p.join(',')).join(' '));
+  f.classList.add("fairway");
+  svg.appendChild(f);
 
-      // fairway
-      let fairway = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-      fairway.setAttribute("points", hole.fairway.map(p=>p.join(',')).join(' '));
-      fairway.setAttribute("fill","#77cc77");
-      svg.appendChild(fairway);
+  // bunkers
+  hole.bunkers.forEach(b => {
+    let bu = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+    bu.setAttribute("points", b.map(p => p.join(',')).join(' '));
+    bu.classList.add("bunker");
+    svg.appendChild(bu);
+  });
 
-      // bunkers
-      hole.bunkers.forEach(b=>{
-        let bunker = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-        bunker.setAttribute("points", b.map(p=>p.join(',')).join(' '));
-        bunker.setAttribute("fill","#d2b48c");
-        svg.appendChild(bunker);
-      });
+  // green
+  let g = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  g.setAttribute("cx", hole.green.center[0]);
+  g.setAttribute("cy", hole.green.center[1]);
+  g.setAttribute("r", hole.green.radius);
+  g.classList.add("green");
+  svg.appendChild(g);
 
-      // green
-      let green = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      green.setAttribute("cx", hole.green.center[0]);
-      green.setAttribute("cy", hole.green.center[1]);
-      green.setAttribute("r", hole.green.radius);
-      green.setAttribute("fill","#339933");
-      svg.appendChild(green);
+  // tee
+  let t = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  t.setAttribute("cx", hole.tee[0]);
+  t.setAttribute("cy", hole.tee[1]);
+  t.setAttribute("r", 6);
+  t.setAttribute("fill", "#e53935");
+  svg.appendChild(t);
 
-      // tee
-      let tee = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      tee.setAttribute("cx", hole.tee[0]);
-      tee.setAttribute("cy", hole.tee[1]);
-      tee.setAttribute("r",5);
-      tee.setAttribute("fill","#ff0000");
-      svg.appendChild(tee);
+  // player
+  let p = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  p.setAttribute("cx", player.x);
+  p.setAttribute("cy", player.y);
+  p.setAttribute("r", 6);
+  p.setAttribute("fill", "#2979ff");
+  svg.appendChild(p);
 
-      // player
-      let dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      dot.setAttribute("cx", player.x);
-      dot.setAttribute("cy", player.y);
-      dot.setAttribute("r",5);
-      dot.setAttribute("fill","#0000ff");
-      svg.appendChild(dot);
+  // flag
+  let flag = document.createElementNS("http://www.w3.org/2000/svg","rect");
+  flag.setAttribute("x", hole.green.center[0] - 3);
+  flag.setAttribute("y", hole.green.center[1] - hole.green.radius - 18);
+  flag.setAttribute("width", 6);
+  flag.setAttribute("height", 18);
+  flag.setAttribute("fill", "#fdd835");
+  svg.appendChild(flag);
+}
 
-      // pin
-      let pin = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      pin.setAttribute("cx", hole.green.center[0]);
-      pin.setAttribute("cy", hole.green.center[1]);
-      pin.setAttribute("r",3);
-      pin.setAttribute("fill","#ffff00");
-      svg.appendChild(pin);
-    }
+function updateDistance() {
+  const hole = holesData[currentHoleIndex];
+  let dx = player.x - hole.green.center[0];
+  let dy = player.y - hole.green.center[1];
+  let d = Math.sqrt(dx*dx + dy*dy);
+  document.getElementById('distance').innerText = `Distance to green: ${Math.round(d)} m`;
+}
 
-    function updateDistance(){
-      const hole = holesData[currentHoleIndex];
-      let dx = player.x - hole.green.center[0];
-      let dy = player.y - hole.green.center[1];
-      let dist = Math.sqrt(dx*dx + dy*dy);
-      document.getElementById('distance').innerText = `Distance to green: ${Math.round(dist)} m`;
-    }
+function renderScorecard() {
+  let scoresDiv = document.getElementById('scores');
+  scoresDiv.innerHTML = '';
+  holesData.forEach((h, i) => {
+    scoresDiv.innerHTML += `
+      <div class="score-hole">
+        <span>Hole ${h.hole} (Par ${h.par})</span>
+        <input type="number" min="0" value="${scores[i]}" data-idx="${i}">
+      </div>`;
+  });
+  scoresDiv.querySelectorAll('input')
+    .forEach(inp => inp.onchange = e => scores[e.target.dataset.idx] = +e.target.value);
+}
 
-    function renderScorecard(){
-      let scoresDiv = document.getElementById('scores');
-      scoresDiv.innerHTML = '';
-      holesData.forEach((h,i)=>{
-        let div = document.createElement('div');
-        div.className = 'score-hole';
-        div.innerHTML = `<span>Hole ${h.hole} (Par ${h.par})</span>
-        <input type="number" min="0" value="${scores[i]}" data-index="${i}">`;
-        scoresDiv.appendChild(div);
-      });
-      scoresDiv.querySelectorAll('input').forEach(input=>{
-        input.addEventListener('change', e=>{
-          let idx = parseInt(e.target.dataset.index);
-          scores[idx] = parseInt(e.target.value);
-        });
-      });
-    }
-  </script>
+init();
+</script>
+
 </body>
 </html>
